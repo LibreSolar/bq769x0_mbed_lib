@@ -111,7 +111,7 @@ private:
     int *OCV;  // Open Circuit Voltage of cell for SOC 100%, 95%, ..., 5%, 0%
 
     // indicates if a new current reading or an error is available from BMS IC
-    bool alertInterruptFlag = true;   // init with true to check and clear errors at start-up
+    bool alertInterruptFlag;
 
     int numberOfCells;
     int cellVoltages[MAX_NUMBER_OF_CELLS];          // mV

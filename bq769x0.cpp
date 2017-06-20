@@ -93,6 +93,7 @@ bq769x0::bq769x0(I2C& bqI2C, PinName alertPin, int bqType, int bqI2CAddress, boo
 
     thermistorBetaValue = 3435;  // typical value for Semitec 103AT-5 thermistor
 
+    alertInterruptFlag = true;   // init with true to check and clear errors at start-up
 
     if (type == bq76920) {
         numberOfCells = 5;
