@@ -1,21 +1,18 @@
-/*
-    bq769x0.h - Battery management system based on bq769x0 for ARM mbed
-    Copyright (C) 2015-2016  Martin Jäger (http://libre.solar)
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as
-    published by the Free Software Foundation, either version 3 of the
-    License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public
-    License along with this program. If not, see
-    <http://www.gnu.org/licenses/>.
-*/
+/* Battery management system based on bq769x0 for ARM mbed
+ * Copyright (c) 2015-2018 Martin Jäger (www.libre.solar)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #ifndef BQ769X0_H
 #define BQ769X0_H
@@ -59,6 +56,9 @@ public:
     void setBatteryCapacity(long capacity_mAh);
     void setOCV(int voltageVsSOC[NUM_OCV_POINTS]);
 
+    int getNumberOfCells(void);
+    int getNumberOfConnectedCells(void);
+
     // limit settings (for battery protection)
     void setTemperatureLimits(int minDischarge_degC, int maxDischarge_degC, int minCharge_degC, int maxCharge_degC);    // °C
     long setShortCircuitProtection(long current_mA, int delay_us = 70);
@@ -81,6 +81,7 @@ public:
     int  getCellVoltage(int idCell);    // from 1 to 15
     int  getMinCellVoltage(void);
     int  getMaxCellVoltage(void);
+    int  getAvgCellVoltage(void);
     float getTemperatureDegC(int channel = 1);
     float getTemperatureDegF(int channel = 1);
     float getSOC(void);
@@ -98,7 +99,6 @@ private:
     // Variables
 
     I2C& _i2c;
-    //Serial _debug;
     Timer _timer;
     InterruptIn _alertInterrupt;
 
@@ -113,7 +113,8 @@ private:
     // indicates if a new current reading or an error is available from BMS IC
     bool alertInterruptFlag;
 
-    int numberOfCells;
+    int numberOfCells;                      // number of cells allowed by IC
+    int connectedCells;                     // actual number of cells connected
     int cellVoltages[MAX_NUMBER_OF_CELLS];          // mV
     int idCellMaxVoltage;
     int idCellMinVoltage;
@@ -154,6 +155,8 @@ private:
     unsigned long interruptTimestamp;
 
     // Methods
+
+    bool determineAddressAndCrc(void);
 
     void  updateVoltages(void);
     void  updateCurrent(void);

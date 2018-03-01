@@ -1,30 +1,18 @@
-/*
-    bq769x0.cpp - Battery management system based on bq769x0 for ARM mbed
-    Copyright (C) 2015-2016  Martin Jäger (http://libre.solar)
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as
-    published by the Free Software Foundation, either version 3 of the
-    License, or (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public
-    License along with this program. If not, see
-    <http://www.gnu.org/licenses/>.
-*/
-
-/*
-  TODO:
-  - CRC check for cell voltage readings
-  - Enable values like 1.5 mOhm for shunt resistor
-  - Decrease current limit if only charge OR discharge FET is on (current goes through body diode of other FET with high voltage drop) or enable ideal diodes
-  - Rework error handling (checkStatus method)
-
-*/
+/* Battery management system based on bq769x0 for ARM mbed
+ * Copyright (c) 2015-2018 Martin Jäger (www.libre.solar)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #include <math.h>     // log for thermistor calculation
 
@@ -72,19 +60,13 @@ uint8_t _crc8_ccitt_update (uint8_t inCrc, uint8_t inData)
     return data;
 }
 
-//, Serial& serial
 //----------------------------------------------------------------------------
 
 bq769x0::bq769x0(I2C& bqI2C, PinName alertPin, int bqType, int bqI2CAddress, bool crc):
     _i2c(bqI2C), _alertInterrupt(alertPin)
 {
     _timer.start();
-    _alertInterrupt.rise(this, &bq769x0::setAlertInterruptFlag);
-
-    I2CAddress = bqI2CAddress;
-
-    type = bqType;
-    crcEnabled = crc;
+    _alertInterrupt.rise(callback(this, &bq769x0::setAlertInterruptFlag));
 
     // set some safe default values
     autoBalancingEnabled = false;
@@ -95,6 +77,7 @@ bq769x0::bq769x0(I2C& bqI2C, PinName alertPin, int bqType, int bqI2CAddress, boo
 
     alertInterruptFlag = true;   // init with true to check and clear errors at start-up
 
+    type = bqType;
     if (type == bq76920) {
         numberOfCells = 5;
     } else if (type == bq76930) {
@@ -108,23 +91,19 @@ bq769x0::bq769x0(I2C& bqI2C, PinName alertPin, int bqType, int bqI2CAddress, boo
         cellVoltages[i] = 0;
     }
 
-    // test communication
-    writeRegister(CC_CFG, 0x19);       // should be set to 0x19 according to datasheet
-    if (readRegister(CC_CFG) == 0x19)
+    //crcEnabled = crc;
+    //I2CAddress = bqI2CAddress;
+
+    if (determineAddressAndCrc())
     {
         // initial settings for bq769x0
         writeRegister(SYS_CTRL1, 0b00011000);  // switch external thermistor and ADC on
         writeRegister(SYS_CTRL2, 0b01000000);  // switch CC_EN on
 
-        // attach ALERT interrupt to this instance
-        //instancePointer = this;
-        //attachInterrupt(digitalPinToInterrupt(alertPin), bq769x0::alertISR, RISING);
-
         // get ADC offset and gain
         adcOffset = (signed int) readRegister(ADCOFFSET);  // convert from 2's complement
         adcGain = 365 + (((readRegister(ADCGAIN1) & 0b00001100) << 1) |
             ((readRegister(ADCGAIN2) & 0b11100000) >> 5)); // uV/LSB
-
     }
     else {
         // TODO: do something else... e.g. set error flag
@@ -134,6 +113,41 @@ bq769x0::bq769x0(I2C& bqI2C, PinName alertPin, int bqType, int bqI2CAddress, boo
     }
 }
 
+//----------------------------------------------------------------------------
+// automatically find out address and CRC setting
+
+bool bq769x0::determineAddressAndCrc(void)
+{
+    I2CAddress = 0x08;
+    crcEnabled = true;
+    writeRegister(CC_CFG, 0x19);
+    if (readRegister(CC_CFG) == 0x19) {
+        return true;
+    }
+
+    I2CAddress = 0x18;
+    crcEnabled = true;
+    writeRegister(CC_CFG, 0x19);
+    if (readRegister(CC_CFG) == 0x19) {
+        return true;
+    }
+
+    I2CAddress = 0x08;
+    crcEnabled = false;
+    writeRegister(CC_CFG, 0x19);
+    if (readRegister(CC_CFG) == 0x19) {
+        return true;
+    }
+
+    I2CAddress = 0x18;
+    crcEnabled = false;
+    writeRegister(CC_CFG, 0x19);
+    if (readRegister(CC_CFG) == 0x19) {
+        return true;
+    }
+
+    return false;
+}
 
 //----------------------------------------------------------------------------
 // Boot IC by pulling the boot pin TS1 high for some ms
@@ -465,6 +479,7 @@ float bq769x0::getSOC(void)
 }
 
 //----------------------------------------------------------------------------
+// SOC calculation based on average cell open circuit voltage
 
 void bq769x0::resetSOC(int percent)
 {
@@ -474,7 +489,7 @@ void bq769x0::resetSOC(int percent)
     }
     else  // reset based on OCV
     {
-        int voltage = getMaxCellVoltage();
+        int voltage = getBatteryVoltage() / getNumberOfConnectedCells();
 
         coulombCounter = 0;  // initialize with totally depleted battery (0% SOC)
 
@@ -679,6 +694,19 @@ int bq769x0::getCellVoltage(int idCell)
     return cellVoltages[idCell-1];
 }
 
+//----------------------------------------------------------------------------
+
+int bq769x0::getNumberOfCells(void)
+{
+    return numberOfCells;
+}
+
+//----------------------------------------------------------------------------
+
+int bq769x0::getNumberOfConnectedCells(void)
+{
+    return connectedCells;
+}
 
 //----------------------------------------------------------------------------
 
@@ -767,6 +795,7 @@ void bq769x0::updateVoltages()
 {
     long adcVal = 0;
     char buf[4];
+    int connectedCellsTemp = 0;
 
     // read battery pack voltage
     adcVal = (readRegister(BAT_HI_BYTE) << 8) | readRegister(BAT_LO_BYTE);
@@ -792,6 +821,10 @@ void bq769x0::updateVoltages()
 
         cellVoltages[i] = adcVal * adcGain / 1000 + adcOffset;
 
+        if (cellVoltages[i] > 500) {
+            connectedCellsTemp++;
+        }
+
         if (cellVoltages[i] > cellVoltages[idCellMaxVoltage]) {
             idCellMaxVoltage = i;
         }
@@ -799,6 +832,7 @@ void bq769x0::updateVoltages()
             idCellMinVoltage = i;
         }
     }
+    connectedCells = connectedCellsTemp;
 }
 
 //----------------------------------------------------------------------------
