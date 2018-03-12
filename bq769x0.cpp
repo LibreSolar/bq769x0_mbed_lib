@@ -20,8 +20,6 @@
 #include "registers.h"
 #include "mbed.h"
 
-#if BQ769X0_DEBUG
-
 const char *byte2char(int x)
 {
     static char b[9];
@@ -35,8 +33,6 @@ const char *byte2char(int x)
 
     return b;
 }
-
-#endif
 
 uint8_t _crc8_ccitt_update (uint8_t inCrc, uint8_t inData)
 {
@@ -178,16 +174,11 @@ int bq769x0::checkStatus()
         regSYS_STAT_t sys_stat;
         sys_stat.regByte = readRegister(SYS_STAT);
 
-        // TODO: folgender Abschnitt eigentlich nicht nötig... CC_READY wird über update regelmäßig aufgerufen,
-        //       tatsächliche Fehler werden später nochmal direkt abgefragt.
-
         // first check, if only a new CC reading is available
         if (sys_stat.bits.CC_READY == 1) {
             //printf("Interrupt: CC ready");
             updateCurrent();  // automatically clears CC ready flag
         }
-
-        // --- end TODO
 
         // Serious error occured
         if (sys_stat.regByte & 0b00111111)
@@ -489,6 +480,7 @@ void bq769x0::resetSOC(int percent)
     }
     else  // reset based on OCV
     {
+        printf("NumCells: %d, voltage: %d V\n", getNumberOfConnectedCells(), getBatteryVoltage());
         int voltage = getBatteryVoltage() / getNumberOfConnectedCells();
 
         coulombCounter = 0;  // initialize with totally depleted battery (0% SOC)
@@ -729,7 +721,6 @@ float bq769x0::getTemperatureDegF(int channel)
 
 
 //----------------------------------------------------------------------------
-// TODO: support multiple temperature sensors
 
 void bq769x0::updateTemperatures()
 {
@@ -747,8 +738,23 @@ void bq769x0::updateTemperatures()
     // - According to bq769x0 datasheet, only 10k thermistors should be used
     // - 25°C reference temperature for Beta equation assumed
     tmp = 1.0/(1.0/(273.15+25) + 1.0/thermistorBetaValue*log(rts/10000.0)); // K
-
     temperatures[0] = (tmp - 273.15) * 10.0;
+
+    if (type == bq76930 || type == bq76940) {
+        adcVal = (readRegister(TS2_HI_BYTE) & 0b00111111) << 8 | readRegister(TS2_LO_BYTE);
+        vtsx = adcVal * 0.382; // mV
+        rts = 10000.0 * vtsx / (3300.0 - vtsx); // Ohm
+        tmp = 1.0/(1.0/(273.15+25) + 1.0/thermistorBetaValue*log(rts/10000.0)); // K
+        temperatures[1] = (tmp - 273.15) * 10.0;
+    }
+
+    if (type == bq76940) {
+        adcVal = (readRegister(TS3_HI_BYTE) & 0b00111111) << 8 | readRegister(TS3_LO_BYTE);
+        vtsx = adcVal * 0.382; // mV
+        rts = 10000.0 * vtsx / (3300.0 - vtsx); // Ohm
+        tmp = 1.0/(1.0/(273.15+25) + 1.0/thermistorBetaValue*log(rts/10000.0)); // K
+        temperatures[2] = (tmp - 273.15) * 10.0;
+    }
 }
 
 
@@ -797,6 +803,8 @@ void bq769x0::updateVoltages()
     char buf[4];
     int connectedCellsTemp = 0;
 
+    uint8_t crc;
+
     // read battery pack voltage
     adcVal = (readRegister(BAT_HI_BYTE) << 8) | readRegister(BAT_LO_BYTE);
     batVoltage = 4.0 * adcGain * adcVal / 1000.0 + 4 * adcOffset;
@@ -812,7 +820,15 @@ void bq769x0::updateVoltages()
         if (crcEnabled == true) {
             _i2c.read(I2CAddress << 1, buf, 4);
             adcVal = (buf[0] & 0b00111111) << 8 | buf[2];
-            // TODO: check CRC byte buf[1] and buf[3]
+
+            // CRC of first bytes includes slave address (including R/W bit) and data
+            crc = _crc8_ccitt_update(0, (I2CAddress << 1) | 1);
+            crc = _crc8_ccitt_update(crc, buf[0]);
+            if (crc != buf[1]) return; // don't save corrupted value
+
+            // CRC of subsequent bytes contain only data
+            crc = _crc8_ccitt_update(0, buf[2]);
+            if (crc != buf[3]) return; // don't save corrupted value
         }
         else {
             _i2c.read(I2CAddress << 1, buf, 2);
@@ -839,7 +855,7 @@ void bq769x0::updateVoltages()
 
 void bq769x0::writeRegister(int address, int data)
 {
-    int crc = 0;
+    uint8_t crc = 0;
     char buf[3];
 
     buf[0] = (char) address;
@@ -848,8 +864,8 @@ void bq769x0::writeRegister(int address, int data)
     if (crcEnabled == true) {
         // CRC is calculated over the slave address (including R/W bit), register address, and data.
         crc = _crc8_ccitt_update(crc, (I2CAddress << 1) | 0);
-        crc = _crc8_ccitt_update(crc, address);
-        crc = _crc8_ccitt_update(crc, data);
+        crc = _crc8_ccitt_update(crc, buf[0]);
+        crc = _crc8_ccitt_update(crc, buf[1]);
         buf[2] = crc;
         _i2c.write(I2CAddress << 1, buf, 3);
     }
@@ -862,7 +878,7 @@ void bq769x0::writeRegister(int address, int data)
 
 int bq769x0::readRegister(int address)
 {
-    unsigned int crc = 0, crcSlave = 0, data;
+    uint8_t crc = 0;
     char buf[2];
 
     #if BQ769X0_DEBUG
@@ -875,14 +891,11 @@ int bq769x0::readRegister(int address)
     if (crcEnabled == true) {
         do {
             _i2c.read(I2CAddress << 1, buf, 2);
-            data = buf[0];
-            crcSlave = buf[1];
             // CRC is calculated over the slave address (including R/W bit) and data.
             crc = _crc8_ccitt_update(crc, (I2CAddress << 1) | 1);
-            crc = _crc8_ccitt_update(crc, data);
-
-        } while (crc != crcSlave);
-        return data;
+            crc = _crc8_ccitt_update(crc, buf[0]);
+        } while (crc != buf[1]);
+        return buf[0];
     }
     else {
         _i2c.read(I2CAddress << 1, buf, 1);
