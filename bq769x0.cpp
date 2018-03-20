@@ -404,7 +404,7 @@ void bq769x0::updateBalancingSwitches(void)
             //printf("Setting CELLBAL%d register to: %s\n", section+1, byte2char(balancingFlags));
             #endif
 
-            balancingStatus |= balancingFlags << section;
+            balancingStatus |= balancingFlags << section*5;
 
             // set balancing register for this section
             writeRegister(CELLBAL1+section, balancingFlags);
