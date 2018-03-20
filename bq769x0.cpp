@@ -390,9 +390,7 @@ void bq769x0::updateBalancingSwitches(void)
                     balancingFlagsTarget = balancingFlags | (1 << i);
 
                     // check if attempting to balance adjacent cells
-                    bool adjacentCellCollision =
-                        ((balancingFlagsTarget << 1) & balancingFlags) ||
-                        ((balancingFlags << 1) & balancingFlagsTarget);
+                    bool adjacentCellCollision = (balancingFlags << 1) & balancingFlagsTarget;
 
                     if (adjacentCellCollision == false) {
                         balancingFlags = balancingFlagsTarget;
