@@ -805,10 +805,6 @@ void bq769x0::updateVoltages()
 
     uint8_t crc;
 
-    // read battery pack voltage
-    adcVal = (readRegister(BAT_HI_BYTE) << 8) | readRegister(BAT_LO_BYTE);
-    batVoltage = 4.0 * adcGain * adcVal / 1000.0 + 4 * adcOffset;
-
     // read cell voltages
     buf[0] = (char) VC1_HI_BYTE;
     _i2c.write(I2CAddress << 1, buf, 1);;
@@ -849,6 +845,10 @@ void bq769x0::updateVoltages()
         }
     }
     connectedCells = connectedCellsTemp;
+    
+    // read battery pack voltage
+    adcVal = (readRegister(BAT_HI_BYTE) << 8) | readRegister(BAT_LO_BYTE);
+    batVoltage = 4.0 * adcGain * adcVal / 1000.0 + connectedCells * adcOffset;
 }
 
 //----------------------------------------------------------------------------
