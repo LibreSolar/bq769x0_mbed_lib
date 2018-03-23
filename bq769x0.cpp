@@ -390,9 +390,7 @@ void bq769x0::updateBalancingSwitches(void)
                     balancingFlagsTarget = balancingFlags | (1 << i);
 
                     // check if attempting to balance adjacent cells
-                    bool adjacentCellCollision =
-                        ((balancingFlagsTarget << 1) & balancingFlags) ||
-                        ((balancingFlags << 1) & balancingFlagsTarget);
+                    bool adjacentCellCollision = (balancingFlags << 1) & balancingFlagsTarget;
 
                     if (adjacentCellCollision == false) {
                         balancingFlags = balancingFlagsTarget;
@@ -404,7 +402,7 @@ void bq769x0::updateBalancingSwitches(void)
             //printf("Setting CELLBAL%d register to: %s\n", section+1, byte2char(balancingFlags));
             #endif
 
-            balancingStatus |= balancingFlags << section;
+            balancingStatus |= balancingFlags << section*5;
 
             // set balancing register for this section
             writeRegister(CELLBAL1+section, balancingFlags);
@@ -805,10 +803,6 @@ void bq769x0::updateVoltages()
 
     uint8_t crc;
 
-    // read battery pack voltage
-    adcVal = (readRegister(BAT_HI_BYTE) << 8) | readRegister(BAT_LO_BYTE);
-    batVoltage = 4.0 * adcGain * adcVal / 1000.0 + 4 * adcOffset;
-
     // read cell voltages
     buf[0] = (char) VC1_HI_BYTE;
     _i2c.write(I2CAddress << 1, buf, 1);;
@@ -849,6 +843,10 @@ void bq769x0::updateVoltages()
         }
     }
     connectedCells = connectedCellsTemp;
+    
+    // read battery pack voltage
+    adcVal = (readRegister(BAT_HI_BYTE) << 8) | readRegister(BAT_LO_BYTE);
+    batVoltage = 4.0 * adcGain * adcVal / 1000.0 + connectedCells * adcOffset;
 }
 
 //----------------------------------------------------------------------------
