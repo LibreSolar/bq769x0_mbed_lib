@@ -311,6 +311,18 @@ bool bq769x0::enableCharging()
 
 //----------------------------------------------------------------------------
 
+void bq769x0::disableCharging()
+{
+    int sys_ctrl2;
+    sys_ctrl2 = readRegister(SYS_CTRL2);
+    writeRegister(SYS_CTRL2, sys_ctrl2 & ~0b00000001);  // switch CHG off
+    #if BQ769X0_DEBUG
+    printf("Disabling CHG FET\n");
+    #endif
+}
+
+//----------------------------------------------------------------------------
+
 bool bq769x0::enableDischarging()
 {
     #if BQ769X0_DEBUG
@@ -332,6 +344,18 @@ bool bq769x0::enableDischarging()
     else {
         return false;
     }
+}
+
+//----------------------------------------------------------------------------
+
+void bq769x0::disableDischarging()
+{
+    int sys_ctrl2;
+    sys_ctrl2 = readRegister(SYS_CTRL2);
+    writeRegister(SYS_CTRL2, sys_ctrl2 & ~0b00000010);  // switch DSG off
+    #if BQ769X0_DEBUG
+    printf("Disabling DISCHG FET\n");
+    #endif
 }
 
 //----------------------------------------------------------------------------
