@@ -205,6 +205,8 @@ int bq769x0::checkStatus()
                         printf("Attempting to clear XR error");
                         #endif
                         writeRegister(SYS_STAT, 0b00100000);
+                        enableCharging();
+                        enableDischarging();
                     }
                 }
                 if (sys_stat.regByte & 0b00010000) { // Alert error
@@ -213,6 +215,8 @@ int bq769x0::checkStatus()
                         printf("Attempting to clear Alert error");
                         #endif
                         writeRegister(SYS_STAT, 0b00010000);
+                        enableCharging();
+                        enableDischarging();
                     }
                 }
                 if (sys_stat.regByte & 0b00001000) { // UV error
@@ -222,6 +226,7 @@ int bq769x0::checkStatus()
                         printf("Attempting to clear UV error");
                         #endif
                         writeRegister(SYS_STAT, 0b00001000);
+                        enableDischarging();
                     }
                 }
                 if (sys_stat.regByte & 0b00000100) { // OV error
@@ -231,6 +236,7 @@ int bq769x0::checkStatus()
                         printf("Attempting to clear OV error");
                         #endif
                         writeRegister(SYS_STAT, 0b00000100);
+                        enableCharging();
                     }
                 }
                 if (sys_stat.regByte & 0b00000010) { // SCD
@@ -239,6 +245,7 @@ int bq769x0::checkStatus()
                         printf("Attempting to clear SCD error");
                         #endif
                         writeRegister(SYS_STAT, 0b00000010);
+                        enableDischarging();
                     }
                 }
                 if (sys_stat.regByte & 0b00000001) { // OCD
@@ -247,6 +254,7 @@ int bq769x0::checkStatus()
                         printf("Attempting to clear OCD error");
                         #endif
                         writeRegister(SYS_STAT, 0b00000001);
+                        enableDischarging();
                     }
                 }
                 secSinceErrorCounter++;
