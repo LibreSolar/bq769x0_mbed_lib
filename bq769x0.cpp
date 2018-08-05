@@ -413,20 +413,36 @@ void bq769x0::updateBalancingSwitches(void)
 
         for (int section = 0; section < numberOfSections; section++)
         {
-            balancingFlags = 0;
+            // find cells which should be balanced and sort them by voltage descending
+            int cellList[5];
+            int cellCounter = 0;
             for (int i = 0; i < 5; i++)
             {
                 if ((cellVoltages[section*5 + i] - cellVoltages[idCellMinVoltage]) > balancingMaxVoltageDifference_mV) {
-
-                    // try to enable balancing of current cell
-                    balancingFlagsTarget = balancingFlags | (1 << i);
-
-                    // check if attempting to balance adjacent cells
-                    bool adjacentCellCollision = (balancingFlags << 1) & balancingFlagsTarget;
-
-                    if (adjacentCellCollision == false) {
-                        balancingFlags = balancingFlagsTarget;
+                    int j = cellCounter;
+                    while (j > 0 && cellVoltages[section*5 + cellList[j - 1]] < cellVoltages[section*5 + i])
+                    {
+                        cellList[j] = cellList[j - 1];
+                        j--;
                     }
+                    cellList[j] = i;
+                    cellCounter++;
+                }
+            }
+
+            balancingFlags = 0;
+            for (int i = 0; i < cellCounter; i++)
+            {
+                // try to enable balancing of current cell
+                balancingFlagsTarget = balancingFlags | (1 << cellList[i]);
+
+                // check if attempting to balance adjacent cells
+                bool adjacentCellCollision =
+                    ((balancingFlagsTarget << 1) & balancingFlags) ||
+                    ((balancingFlags << 1) & balancingFlagsTarget);
+
+                if (adjacentCellCollision == false) {
+                    balancingFlags = balancingFlagsTarget;
                 }
             }
 
