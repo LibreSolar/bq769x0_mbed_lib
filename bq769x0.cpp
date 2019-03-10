@@ -269,6 +269,58 @@ int bq769x0::checkStatus()
 }
 
 //----------------------------------------------------------------------------
+// checks if temperatures are within the limits, otherwise disables CHG/DSG FET
+
+void bq769x0::checkCellTemp()
+{
+    int numberOfThermistors = numberOfCells/5;
+    bool cellTempChargeError = 0;
+    bool cellTempDischargeError = 0;
+
+    for (int thermistor = 0; thermistor < numberOfThermistors; thermistor++) {
+        cellTempChargeError |=
+            temperatures[thermistor] > maxCellTempCharge ||
+            temperatures[thermistor] < minCellTempCharge;
+
+        cellTempDischargeError |=
+            temperatures[thermistor] > maxCellTempDischarge ||
+            temperatures[thermistor] < minCellTempDischarge;
+    }
+
+    if (cellTempChargeErrorFlag != cellTempChargeError) {
+        cellTempChargeErrorFlag = cellTempChargeError;
+        if (cellTempChargeError) {
+            disableCharging();
+            #if BQ769X0_DEBUG
+            printf("Temperature error (CHG)");
+            #endif
+        }
+        else {
+            enableCharging();
+            #if BQ769X0_DEBUG
+            printf("Clearing temperature error (CHG)");
+            #endif
+        }
+    }
+
+    if (cellTempDischargeErrorFlag != cellTempDischargeError) {
+        cellTempDischargeErrorFlag = cellTempDischargeError;
+        if (cellTempDischargeError) {
+            disableDischarging();
+            #if BQ769X0_DEBUG
+            printf("Temperature error (DSG)");
+            #endif
+        }
+        else {
+            enableDischarging();
+            #if BQ769X0_DEBUG
+            printf("Clearing temperature error (DSG)");
+            #endif
+        }
+    }
+}
+
+//----------------------------------------------------------------------------
 // should be called at least once every 250 ms to get correct coulomb counting
 
 void bq769x0::update()
@@ -277,6 +329,7 @@ void bq769x0::update()
     updateVoltages();
     updateTemperatures();
     updateBalancingSwitches();
+    checkCellTemp();
 }
 
 //----------------------------------------------------------------------------
@@ -299,10 +352,18 @@ bool bq769x0::enableCharging()
     printf("temperatures[0] = %d\n", temperatures[0]);
     #endif
 
+    int numberOfThermistors = numberOfCells/5;
+    bool cellTempChargeError = 0;
+
+    for (int thermistor = 0; thermistor < numberOfThermistors; thermistor++) {
+        cellTempChargeError |=
+            temperatures[thermistor] > maxCellTempCharge ||
+            temperatures[thermistor] < minCellTempCharge;
+    }
+
     if (checkStatus() == 0 &&
         cellVoltages[idCellMaxVoltage] < maxCellVoltage &&
-        temperatures[0] < maxCellTempCharge &&
-        temperatures[0] > minCellTempCharge)
+        cellTempChargeError == 0)
     {
         int sys_ctrl2;
         sys_ctrl2 = readRegister(SYS_CTRL2);
@@ -339,10 +400,18 @@ bool bq769x0::enableDischarging()
     printf("temperatures[0] = %d\n", temperatures[0]);
     #endif
 
+    int numberOfThermistors = numberOfCells/5;
+    bool cellTempDischargeError = 0;
+
+    for (int thermistor = 0; thermistor < numberOfThermistors; thermistor++) {
+        cellTempDischargeError |=
+            temperatures[thermistor] > maxCellTempDischarge ||
+            temperatures[thermistor] < minCellTempDischarge;
+    }
+
     if (checkStatus() == 0 &&
         cellVoltages[idCellMinVoltage] > minCellVoltage &&
-        temperatures[0] < maxCellTempDischarge &&
-        temperatures[0] > minCellTempDischarge)
+        cellTempDischargeError == 0)
     {
         int sys_ctrl2;
         sys_ctrl2 = readRegister(SYS_CTRL2);
