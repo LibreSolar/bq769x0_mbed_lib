@@ -154,6 +154,9 @@ private:
     unsigned int secSinceErrorCounter;
     unsigned long interruptTimestamp;
 
+    bool cellTempChargeErrorFlag;
+    bool cellTempDischargeErrorFlag;
+
     // Methods
 
     bool determineAddressAndCrc(void);
@@ -163,6 +166,8 @@ private:
     void  updateTemperatures(void);
 
     void updateBalancingSwitches(void);
+
+    void checkCellTemp(void);
 
     int  readRegister(int address);
     void writeRegister(int address, int data);
