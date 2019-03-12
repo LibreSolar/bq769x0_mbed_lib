@@ -60,7 +60,7 @@ public:
     int getNumberOfConnectedCells(void);
 
     // limit settings (for battery protection)
-    void setTemperatureLimits(int minDischarge_degC, int maxDischarge_degC, int minCharge_degC, int maxCharge_degC);    // °C
+    void setTemperatureLimits(int minDischarge_degC, int maxDischarge_degC, int minCharge_degC, int maxCharge_degC, int hysteresis_degC = 2);    // °C
     long setShortCircuitProtection(long current_mA, int delay_us = 70);
     long setOvercurrentChargeProtection(long current_mA, int delay_ms = 8);
     long setOvercurrentDischargeProtection(long current_mA, int delay_ms = 8);
@@ -135,6 +135,7 @@ private:
     int minCellTempDischarge;
     int maxCellTempCharge;
     int maxCellTempDischarge;
+    int cellTempHysteresis;
 
     // Cell voltage limits (mV)
     int maxCellVoltage;
