@@ -591,7 +591,7 @@ void bq769x0::resetSOC(int percent)
 {
     if (percent <= 100 && percent >= 0)
     {
-        coulombCounter = nominalCapacity * percent / 100.0;
+        coulombCounter = nominalCapacity * (percent / 100.0);
     }
     else  // reset based on OCV
     {
