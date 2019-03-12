@@ -279,12 +279,12 @@ void bq769x0::checkCellTemp()
 
     for (int thermistor = 0; thermistor < numberOfThermistors; thermistor++) {
         cellTempChargeError |=
-            temperatures[thermistor] > maxCellTempCharge ||
-            temperatures[thermistor] < minCellTempCharge;
+            temperatures[thermistor] > maxCellTempCharge - cellTempChargeErrorFlag ? cellTempHysteresis : 0 ||
+            temperatures[thermistor] < minCellTempCharge + cellTempChargeErrorFlag ? cellTempHysteresis : 0;
 
         cellTempDischargeError |=
-            temperatures[thermistor] > maxCellTempDischarge ||
-            temperatures[thermistor] < minCellTempDischarge;
+            temperatures[thermistor] > maxCellTempDischarge - cellTempDischargeErrorFlag ? cellTempHysteresis : 0 ||
+            temperatures[thermistor] < minCellTempDischarge + cellTempDischargeErrorFlag ? cellTempHysteresis : 0;
     }
 
     if (cellTempChargeErrorFlag != cellTempChargeError) {
@@ -620,13 +620,14 @@ void bq769x0::resetSOC(int percent)
 //----------------------------------------------------------------------------
 
 void bq769x0::setTemperatureLimits(int minDischarge_degC, int maxDischarge_degC,
-  int minCharge_degC, int maxCharge_degC)
+  int minCharge_degC, int maxCharge_degC, int hysteresis_degC)
 {
     // Temperature limits (°C/10)
     minCellTempDischarge = minDischarge_degC * 10;
     maxCellTempDischarge = maxDischarge_degC * 10;
     minCellTempCharge = minCharge_degC * 10;
     maxCellTempCharge = maxCharge_degC * 10;
+    cellTempHysteresis = hysteresis_degC * 10;
 }
 
 //----------------------------------------------------------------------------
